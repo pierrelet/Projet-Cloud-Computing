@@ -1,0 +1,13 @@
+# Terraform
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# Clé SSH (ne pas commiter)
+terraform/id_rsa.pub
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

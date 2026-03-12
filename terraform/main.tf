@@ -5,7 +5,7 @@ locals {
 
 resource "aws_key_pair" "project_key" {
   key_name   = local.key_name
-  public_key = file(var.public_key_path)
+  public_key = file("${path.module}/${var.public_key_path}")
 }
 
 resource "aws_security_group" "web_sg" {
@@ -49,6 +49,49 @@ resource "aws_s3_bucket_public_access_block" "static_files_block" {
   restrict_public_buckets = true
 }
 
+# Rôle IAM pour que l'instance EC2 puisse accéder au bucket S3
+resource "aws_iam_role" "flask_ec2_role" {
+  name = "${var.project_name}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "flask_s3_policy" {
+  name = "${var.project_name}-s3-policy"
+  role = aws_iam_role.flask_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket",
+        "s3:DeleteObject"
+      ]
+      Resource = [
+        aws_s3_bucket.static_files.arn,
+        "${aws_s3_bucket.static_files.arn}/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "flask_profile" {
+  name = "${var.project_name}-profile"
+  role = aws_iam_role.flask_ec2_role.name
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
 
@@ -71,12 +114,17 @@ resource "aws_instance" "flask_server" {
   key_name                    = aws_key_pair.project_key.key_name
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
   associate_public_ip_address = true
+  iam_instance_profile        = aws_iam_instance_profile.flask_profile.name
 
   user_data = templatefile("${path.module}/../provisioning/user_data.sh", {
-    project_name   = var.project_name
-    bucket_name    = aws_s3_bucket.static_files.bucket
-    aws_region     = var.aws_region
+    project_name     = var.project_name
+    bucket_name      = aws_s3_bucket.static_files.bucket
+    aws_region       = var.aws_region
+    app_py_b64       = base64encode(file("${path.module}/../app/app.py"))
+    requirements_b64 = base64encode(file("${path.module}/../app/requirements.txt"))
   })
+
+  user_data_replace_on_change = true
 
   tags = {
     Name = "${var.project_name}-flask-server"
