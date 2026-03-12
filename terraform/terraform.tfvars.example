@@ -1,0 +1,7 @@
+aws_region        = "eu-west-3"
+project_name      = "projet-cloud-flask"
+instance_type     = "t2.micro"
+public_key_path   = "C:/Users/votre_user/.ssh/id_rsa.pub"
+allowed_ssh_cidr  = "X.X.X.X/32"
+allowed_http_cidr = "0.0.0.0/0"
+
